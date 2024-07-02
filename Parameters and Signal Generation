@@ -1,0 +1,15 @@
+% Parameters
+sf = 7; % Spreading Factor (typically between 7 and 12 for LoRa)
+bw = 125e3; % Bandwidth (125 kHz is common for LoRa)
+fs = bw; % Sampling frequency
+
+% Derived parameters
+n = 2^sf; % Number of chips (or chirps)
+T_symbol = n / bw; % Symbol duration
+
+% Time vector for one symbol
+t = (0:n-1) / fs;
+
+% Example data to modulate (symbol values from 0 to 2^sf-1)
+data = [0, 1, 2, 3, 4, 5, 6, 7]; % Example data
+num_symbols = length(data);
