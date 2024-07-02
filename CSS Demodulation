@@ -1,0 +1,34 @@
+% Preallocate array for demodulated symbols
+demodulated_data = zeros(1, num_symbols);
+
+for k = 1:num_symbols
+    % Extract the received chirp corresponding to the current symbol
+    rx_chirp = tx_signal((k-1)*n + (1:n));
+    
+    % Generate the reference chirp signal
+    ref_chirp = exp(-1i * 2 * pi * (bw / 2 / T_symbol) * (t.^2));
+    
+    % Multiply received chirp by the reference chirp (despreading)
+    product = rx_chirp .* ref_chirp;
+    
+    % Perform FFT to detect the frequency component
+    fft_result = fft(product);
+    
+    % Detect the peak frequency (symbol value)
+    [~, max_idx] = max(abs(fft_result));
+    demodulated_symbol = mod(max_idx - 1, n);
+    
+    % Store the demodulated symbol
+    demodulated_data(k) = demodulated_symbol;
+end
+
+% Display the demodulated data
+disp('Demodulated Data:');
+disp(demodulated_data);
+
+% Plot the real part of the received signal
+figure;
+plot(real(tx_signal));
+title('Received CSS Signal');
+xlabel('Sample Index');
+ylabel('Amplitude');
