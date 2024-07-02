@@ -1,0 +1,25 @@
+% Tentukan path lengkap ke file
+file_path = 'C:/images/example_image.png';
+
+% Coba membaca gambar
+try
+    img = imread(file_path);
+catch ME
+    error('Error reading the image file: %s', ME.message);
+end
+
+% Periksa ukuran dan tipe data gambar
+img_size = size(img);
+disp(['Image Size: ', mat2str(img_size)]);
+disp(['Image Data Type: ', class(img)]);
+
+% Konversi gambar ke tipe data yang sesuai jika perlu
+if ~isa(img, 'uint8') && ~isa(img, 'uint16') && ~isa(img, 'int16') && ...
+   ~isa(img, 'single') && ~isa(img, 'double')
+    img = uint8(img); % Konversi ke uint8 sebagai contoh
+end
+
+% Tampilkan gambar
+figure;
+imshow(img);
+title('Loaded Image');
