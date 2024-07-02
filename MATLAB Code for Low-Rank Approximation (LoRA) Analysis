@@ -1,0 +1,22 @@
+% Generate a sample matrix
+A = rand(10, 10); % 10x10 random matrix
+
+% Perform Singular Value Decomposition (SVD)
+[U, S, V] = svd(A);
+
+% Define the rank for approximation
+k = 3;
+
+% Create the low-rank approximation
+A_k = U(:, 1:k) * S(1:k, 1:k) * V(:, 1:k)';
+
+% Display the original and approximated matrices
+disp('Original Matrix:');
+disp(A);
+
+disp('Low-Rank Approximated Matrix:');
+disp(A_k);
+
+% Compute and display the approximation error
+error = norm(A - A_k, 'fro');
+disp(['Approximation Error (Frobenius norm): ', num2str(error)]);
