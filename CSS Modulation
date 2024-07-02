@@ -1,0 +1,21 @@
+% Preallocate the signal array
+tx_signal = zeros(1, num_symbols * n);
+
+for k = 1:num_symbols
+    % Generate the chirp signal for the current symbol
+    chirp_signal = exp(1i * 2 * pi * (bw / 2 / T_symbol) * (t.^2));
+    
+    % Frequency shift the chirp signal according to the symbol value
+    freq_shift = exp(1i * 2 * pi * (data(k) / T_symbol) * t);
+    modulated_chirp = chirp_signal .* freq_shift;
+    
+    % Append to the transmission signal
+    tx_signal((k-1)*n + (1:n)) = modulated_chirp;
+end
+
+% Plot the real part of the transmitted signal
+figure;
+plot(real(tx_signal));
+title('Transmitted CSS Signal');
+xlabel('Sample Index');
+ylabel('Amplitude');
