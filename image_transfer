@@ -1,0 +1,88 @@
+% Read the image
+img = imread('example_image.png'); % Replace with your image file
+img_gray = rgb2gray(img); % Convert to grayscale
+img_resized = imresize(img_gray, [64, 64]); % Resize to a smaller size for simplicity
+
+% Display the original and preprocessed image
+figure;
+subplot(1, 2, 1);
+imshow(img);
+title('Original Image');
+
+subplot(1, 2, 2);
+imshow(img_resized);
+title('Preprocessed Image');
+
+% Convert the image to a 1D array
+img_data = img_resized(:);
+
+% Define packet size (e.g., 32 bytes per packet)
+packet_size = 32;
+num_packets = ceil(length(img_data) / packet_size);
+
+% Pad the data to make it fit into the packets exactly
+padded_data = [img_data; zeros(num_packets * packet_size - length(img_data), 1)];
+
+% Reshape the data into packets
+packets = reshape(padded_data, packet_size, num_packets);
+
+% Display the number of packets
+disp(['Number of packets: ', num2str(num_packets)]);
+% Parameters for LoRa modulation (simplified)
+sf = 7; % Spreading Factor
+bw = 125e3; % Bandwidth
+fs = bw; % Sampling frequency
+n = 2^sf; % Number of chips (or chirps)
+T_symbol = n / bw; % Symbol duration
+t = (0:n-1) / fs; % Time vector for one symbol
+
+% Modulation function (simple chirp modulation)
+chirp_signal = exp(1i * 2 * pi * (bw / 2 / T_symbol) * (t.^2));
+
+% Transmit all packets
+tx_signal = [];
+for i = 1:num_packets
+    packet = packets(:, i);
+    modulated_packet = [];
+    for byte = packet'
+        freq_shift = exp(1i * 2 * pi * (byte / 255) * t);
+        modulated_chirp = chirp_signal .* freq_shift;
+        modulated_packet = [modulated_packet, modulated_chirp];
+    end
+    tx_signal = [tx_signal, modulated_packet];
+end
+
+% Plot the transmitted signal
+figure;
+plot(real(tx_signal(1:1000))); % Plot a small portion for clarity
+title('Transmitted LoRa Signal');
+xlabel('Sample Index');
+ylabel('Amplitude');
+
+% Preallocate array for demodulated packets
+demodulated_packets = zeros(packet_size, num_packets);
+
+for i = 1:num_packets
+    received_packet = tx_signal((i-1)*packet_size*n + (1:packet_size*n));
+    demodulated_packet = [];
+    for j = 1:packet_size
+        rx_chirp = received_packet((j-1)*n + (1:n));
+        product = rx_chirp .* conj(chirp_signal);
+        fft_result = fft(product);
+        [~, max_idx] = max(abs(fft_result));
+        demodulated_byte = (max_idx - 1) * 255 / n;
+        demodulated_packet = [demodulated_packet; round(demodulated_byte)];
+    end
+    demodulated_packets(:, i) = demodulated_packet;
+end
+
+% Reconstruct the image from demodulated packets
+received_data = demodulated_packets(:);
+received_data = received_data(1:length(img_data)); % Remove padding
+received_img = reshape(received_data, size(img_resized));
+
+% Display the reconstructed image
+figure;
+imshow(uint8(received_img));
+title('Reconstructed Image');
+
