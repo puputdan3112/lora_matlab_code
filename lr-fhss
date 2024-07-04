@@ -1,0 +1,44 @@
+% Check if Communications Toolbox is installed
+assert(~isempty(ver('comm')), 'Communications Toolbox is required.');
+
+% LoRaWAN parameters
+sf = 7;               % Spreading Factor
+bw = 125e3;           % Bandwidth (125 kHz)
+cr = 4/5;             % Coding Rate
+fc = 868.1e6;         % Center Frequency (in Hz)
+txPower = 14;         % Transmission Power (in dBm)
+
+% Create LoRaWAN Transmitter object
+loraTx = loraTransmitter('SpreadingFactor', sf, 'Bandwidth', bw, ...
+                         'CodingRate', cr, 'Frequency', fc, ...
+                         'TransmitPower', txPower);
+
+% Create LoRaWAN Receiver object
+loraRx = loraReceiver('SpreadingFactor', sf, 'Bandwidth', bw, ...
+                      'CodingRate', cr, 'Frequency', fc);
+
+% Simulation parameters
+numFrames = 100;      % Number of frames to transmit
+payloadLength = 50;   % Length of the payload in bytes
+
+% Simulation loop
+for frameIdx = 1:numFrames
+    % Generate random payload data
+    payloadData = randi([0 255], payloadLength, 1, 'uint8');
+    
+    % Transmit LoRaWAN frame
+    txWaveform = loraTx(payloadData);
+    
+    % Pass the transmitted waveform through a channel (Add noise, fading, etc.)
+    rxWaveform = awgn(txWaveform, 30, 'measured');  % Add white Gaussian noise
+    
+    % Receive LoRaWAN frame
+    [receivedData, frameInfo] = loraRx(rxWaveform);
+    
+    % Analyze the received data and frame information
+    if ~isempty(receivedData)
+        fprintf('Frame %d: Received %d bytes\n', frameIdx, length(receivedData));
+    else
+        fprintf('Frame %d: Reception failed\n', frameIdx);
+    end
+end
