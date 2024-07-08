@@ -1,0 +1,51 @@
+% Parameters
+numChannels = 10;
+numHops = 50;
+dataLength = 100;
+dataRate = 1; % bits per second for simplicity
+seed = 42;
+
+% Generate random data
+rng(seed);
+data = randi([0 1], 1, dataLength);
+
+% Generate frequency hopping sequence
+hoppingSequence = randi([1 numChannels], 1, numHops);
+
+% Simulate FHSS transmission
+function transmittedSignal = simulateFHSS(data, hoppingSequence, numHops)
+    transmittedSignal = zeros(1, length(data));
+    currentHop = 1;
+    for i = 1:length(data)
+        frequency = hoppingSequence(currentHop);
+        transmittedSignal(i) = frequency;
+        currentHop = mod(currentHop, numHops) + 1;
+    end
+end
+
+fhssSignal = simulateFHSS(data, hoppingSequence, numHops);
+
+% Simulate ADR transmission
+function transmittedSignal = simulateADR(data)
+    dataRate = linspace(1, 5, length(data)); % Increasing data rate
+    transmittedSignal = dataRate;
+end
+
+adrSignal = simulateADR(data);
+
+% Plot signals
+figure;
+
+subplot(2, 1, 1);
+plot(fhssSignal, 'bo-');
+title('FHSS Signal');
+xlabel('Time');
+ylabel('Frequency Channel');
+grid on;
+
+subplot(2, 1, 2);
+plot(adrSignal, 'ro-');
+title('ADR Signal');
+xlabel('Time');
+ylabel('Data Rate');
+grid on;
