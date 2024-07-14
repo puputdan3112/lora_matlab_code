@@ -1,0 +1,48 @@
+% Fungsi untuk menghitung data rate berdasarkan RSSI dan SNR
+function dataRate = calculate_data_rate(rssi, snr)
+    if rssi > -70 && snr > 10
+        dataRate = 5.5;  % Mbps (Data rate tinggi)
+    elseif rssi > -80 && snr > 5
+        dataRate = 2.5;  % Mbps
+    else
+        dataRate = 0.3;  % Mbps (Data rate rendah)
+    end
+end
+
+% Fungsi untuk menghitung power output berdasarkan RSSI
+function powerOutput = calculate_power_output(rssi)
+    if rssi > -70
+        powerOutput = 10;  % dBm (Power output rendah)
+    elseif rssi > -80
+        powerOutput = 15;  % dBm
+    else
+        powerOutput = 20;  % dBm (Power output tinggi)
+    end
+end
+
+% Simulasi kondisi sinyal
+num_points = 100;
+rssi_values = -100 + (50 * rand(num_points, 1));  % Nilai RSSI antara -100 hingga -50 dBm
+snr_values = 15 * rand(num_points, 1);            % Nilai SNR antara 0 hingga 15 dB
+
+data_rates = zeros(num_points, 1);
+power_outputs = zeros(num_points, 1);
+
+for i = 1:num_points
+    data_rates(i) = calculate_data_rate(rssi_values(i), snr_values(i));
+    power_outputs(i) = calculate_power_output(rssi_values(i));
+end
+
+% Plot hasil simulasi
+figure;
+yyaxis left;
+plot(1:num_points, data_rates, 'r-');
+ylabel('Data Rate (Mbps)');
+xlabel('Point');
+title('Simulasi ADR pada LoRa');
+yyaxis right;
+plot(1:num_points, power_outputs, 'b-');
+ylabel('Power Output (dBm)');
+
+legend('Data Rate', 'Power Output');
+grid on;
