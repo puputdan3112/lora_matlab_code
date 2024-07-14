@@ -1,0 +1,41 @@
+% Fungsi untuk menghitung data rate berdasarkan SF, BW, dan CR
+function dataRate = lora_data_rate(sf, bw, cr)
+    dataRate = (bw / (2 ^ sf)) * cr * 1000;
+end
+
+% Parameter ADR
+spreading_factors = [7, 8, 9, 10, 11, 12];
+bandwidths = [125e3, 250e3, 500e3];  % Bandwidth dalam Hz
+coding_rate = 4/5;
+
+% Menyimpan hasil data rate dalam matriks
+data_rates = zeros(length(spreading_factors), length(bandwidths));
+
+% Menghitung data rate untuk setiap kombinasi SF dan BW
+for i = 1:length(spreading_factors)
+    for j = 1:length(bandwidths)
+        data_rates(i, j) = lora_data_rate(spreading_factors(i), bandwidths(j), coding_rate);
+    end
+end
+
+% Menampilkan tabel hasil
+fprintf('Spreading Factor (SF) | Bandwidth (kHz) | Data Rate (kbps)\n');
+fprintf('-------------------------------------------------------\n');
+for i = 1:length(spreading_factors)
+    for j = 1:length(bandwidths)
+        fprintf('SF%d                 | %d             | %.2f\n', spreading_factors(i), bandwidths(j)/1e3, data_rates(i, j));
+    end
+end
+
+% Plot hasil data rate
+figure;
+hold on;
+for j = 1:length(bandwidths)
+    plot(spreading_factors, data_rates(:, j), 'DisplayName', sprintf('%d kHz', bandwidths(j)/1e3));
+end
+hold off;
+xlabel('Spreading Factor (SF)');
+ylabel('Data Rate (kbps)');
+title('Data Rate LoRa untuk Berbagai Spreading Factor dan Bandwidth');
+legend('Location', 'northwest');
+grid on;
