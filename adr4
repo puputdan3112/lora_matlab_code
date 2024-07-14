@@ -1,1 +1,59 @@
+% Fungsi untuk menghitung data rate berdasarkan SF, BW, dan CR
+function dataRate = lora_data_rate(sf, bw, cr)
+    dataRate = (bw / (2 ^ sf)) * cr * 1000;
+end
+
+% Parameter ADR
+spreading_factors = [7, 8, 9, 10, 11, 12];
+bandwidths = [125e3, 250e3, 500e3];  % Bandwidth dalam Hz
+coding_rate = 4/5;
+
+% Simulasi kondisi sinyal
+num_points = 100;
+rssi_values = -100 + (50 * rand(num_points, 1));  % Nilai RSSI antara -100 hingga -50 dBm
+snr_values = 15 * rand(num_points, 1);            % Nilai SNR antara 0 hingga 15 dB
+
+% Contoh implementasi ADR sederhana (Device Controlled ADR)
+data_rates = zeros(num_points, 1);
+power_outputs = zeros(num_points, 1);
+
+for i = 1:num_points
+    if rssi_values(i) > -70 && snr_values(i) > 10
+        sf = 7;
+        bw = 500e3;
+    elseif rssi_values(i) > -80 && snr_values(i) > 5
+        sf = 9;
+        bw = 250e3;
+    else
+        sf = 12;
+        bw = 125e3;
+    end
+    data_rates(i) = lora_data_rate(sf, bw, coding_rate);
+    power_outputs(i) = calculate_power_output(rssi_values(i));
+end
+
+% Plot hasil simulasi
+figure;
+yyaxis left;
+plot(1:num_points, data_rates, 'r-');
+ylabel('Data Rate (kbps)');
+xlabel('Point');
+title('Simulasi ADR pada LoRa');
+yyaxis right;
+plot(1:num_points, power_outputs, 'b-');
+ylabel('Power Output (dBm)');
+
+legend('Data Rate', 'Power Output');
+grid on;
+
+% Definisi fungsi tambahan
+function powerOutput = calculate_power_output(rssi)
+    if rssi > -70
+        powerOutput = 10;  % dBm (Power output rendah)
+    elseif rssi > -80
+        powerOutput = 15;  % dBm
+    else
+        powerOutput = 20;  % dBm (Power output tinggi)
+    end
+end
 
