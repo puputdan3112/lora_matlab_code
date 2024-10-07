@@ -1,0 +1,14 @@
+% Define USRP transmitter parameters
+platform = 'B200';
+serialNum = '3243305';
+
+% Create the USRP transmitter object
+usrpTx = comm.SDRuTransmitter(...
+    'Platform', platform, ...
+    'SerialNum', serialNum, ...
+    'CenterFrequency', 2.4e9, ... % Set your desired frequency (2.4 GHz as an example)
+    'Gain', 0, ...                % Set the gain (adjust as needed)
+    'InterpolationFactor', 1);    % Set interpolation factor if needed
+
+% Verify that the transmitter object is created successfully
+disp('USRP Transmitter created successfully.');
