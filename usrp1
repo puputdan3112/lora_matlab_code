@@ -1,0 +1,50 @@
+% Define parameters
+centerFreq = 2.4e9; % Center frequency (2.4 GHz)
+sampleRate = 1e6;   % Sample rate (1 MHz)
+numSamples = 10000; % Number of samples to transmit/receive
+
+% Create a USRP object for transmitting
+usrpTx = comm.SDRuTransmitter(...
+    'Platform', 'B200', ...
+    'SerialNum', '', ... % Enter the serial number if needed
+    'CenterFrequency', centerFreq, ...
+    'SampleRate', sampleRate, ...
+    'Gain', 0); % Adjust gain as necessary
+
+% Create a USRP object for receiving
+usrpRx = comm.SDRuReceiver(...
+    'Platform', 'B200', ...
+    'SerialNum', '', ... % Enter the serial number if needed
+    'CenterFrequency', centerFreq, ...
+    'SampleRate', sampleRate, ...
+    'OutputDataType', 'double');
+
+% Create a simple test signal (e.g., a sine wave)
+t = (0:numSamples-1)'/sampleRate; % Time vector
+signal = 0.5 * sin(2 * pi * 1e3 * t); % 1 kHz sine wave
+
+% Transmit the signal
+disp('Transmitting...');
+step(usrpTx, signal);
+
+% Receive the signal
+disp('Receiving...');
+receivedSignal = step(usrpRx);
+
+% Release resources
+release(usrpTx);
+release(usrpRx);
+
+% Plot results
+figure;
+subplot(2,1,1);
+plot(t, signal);
+title('Transmitted Signal');
+xlabel('Time (s)');
+ylabel('Amplitude');
+
+subplot(2,1,2);
+plot((0:length(receivedSignal)-1)/sampleRate, real(receivedSignal));
+title('Received Signal');
+xlabel('Time (s)');
+ylabel('Amplitude');
