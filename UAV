@@ -1,0 +1,284 @@
+% Error Trajectory in Dynamics Aircraft Flight Simulation
+% Program ini mensimulasikan dinamika penerbangan pesawat dengan analisis error trajectory
+% untuk optimasi dan pendekatan teknik telekomunikasi
+
+clear all;
+close all;
+clc;
+
+%% Parameter Pesawat
+% Parameter dasar pesawat
+mass = 1000;          % kg
+Iyy = 3000;           % kg.m^2
+S = 20;               % m^2
+c_bar = 2;            % m
+g = 9.81;             % m/s^2
+
+% Koefisien aerodinamika
+CL_alpha = 5;         % lift coefficient per radian
+CD0 = 0.02;           % drag coefficient at zero lift
+K = 0.05;             % induced drag factor
+Cm_alpha = -0.5;      % pitch moment coefficient per radian
+Cm_q = -10;           % pitch damping coefficient
+Cm_delta_e = -1.5;    % elevator effectiveness
+
+% Parameter telekomunikasi
+comm_delay = 0.1;     % seconds
+packet_loss_prob = 0.05;  % probability of packet loss
+noise_variance = 0.01;    % variance of noise
+
+%% Kondisi penerbangan awal
+V0 = 100;             % m/s
+alpha0 = 0*pi/180;    % rad
+theta0 = 3*pi/180;    % rad
+q0 = 0;               % rad/s
+h0 = 1000;            % m
+x0 = 0;               % m
+
+% Target trajectory
+h_target = @(t) 1000 + 100*sin(0.01*t);  % altitude target
+x_target = @(t) V0*t;                    % distance target
+
+%% Parameter simulasi
+t_start = 0;          % s
+t_end = 300;          % s
+dt = 0.1;             % s
+t = t_start:dt:t_end;
+n_steps = length(t);
+
+%% Inisialisasi variabel
+% State vector: [V, alpha, theta, q, h, x]
+X = zeros(6, n_steps);
+X(:,1) = [V0; alpha0; theta0; q0; h0; x0];
+
+% Control input (elevator)
+delta_e = zeros(1, n_steps);
+
+% Tracking errors
+error_h = zeros(1, n_steps);
+error_x = zeros(1, n_steps);
+error_transmitted = zeros(1, n_steps);  % Error yang dikirim lewat telekomunikasi
+
+%% Adaptive PID Controller parameters
+Kp_h = 0.01;          % Proportional gain for altitude
+Ki_h = 0.001;         % Integral gain for altitude
+Kd_h = 0.05;          % Derivative gain for altitude
+
+% Error integral dan sebelumnya untuk kontrol PID
+error_h_int = 0;
+error_h_prev = 0;
+
+%% Komunikasi dan Optimasi Parameter
+% Fungsi untuk simulasi paket loss
+packet_loss = @() rand() < packet_loss_prob;
+
+% Fungsi untuk simulasi delay
+get_delayed_data = @(data, delay_steps) [zeros(1, min(delay_steps, length(data))), data(1:end-min(delay_steps, length(data)))];
+
+% Fungsi untuk simulasi noise
+add_noise = @(data) data + sqrt(noise_variance)*randn(size(data));
+
+% Optimasi parameter menggunakan pendekatan Gradient Descent sederhana
+learning_rate = 0.0001;
+optimization_interval = 10; % Frequency of parameter updates
+
+%% Main Simulation Loop
+for i = 1:n_steps-1
+    % Current state
+    V = X(1,i);
+    alpha = X(2,i);
+    theta = X(3,i);
+    q = X(4,i);
+    h = X(5,i);
+    x = X(6,i);
+    
+    % Hitung target saat ini
+    h_target_current = h_target(t(i));
+    x_target_current = x_target(t(i));
+    
+    % Hitung tracking error
+    error_h(i) = h_target_current - h;
+    error_x(i) = x_target_current - x;
+    
+    % Simulasi komunikasi telekomunikasi dengan delay dan noise
+    delay_steps = round(comm_delay/dt);
+    
+    if ~packet_loss()
+        % Jika paket tidak hilang, kirim data dengan noise
+        error_transmitted(i) = add_noise(error_h(i));
+    else
+        % Jika paket hilang, gunakan nilai sebelumnya
+        if i > 1
+            error_transmitted(i) = error_transmitted(i-1);
+        else
+            error_transmitted(i) = 0;
+        end
+    end
+    
+    % Kontrol PID dengan error yang sudah dikirim melalui telekomunikasi
+    % Apply delay to transmitted error
+    delayed_error = 0;
+    if i > delay_steps
+        delayed_error = error_transmitted(i-delay_steps);
+    end
+    
+    % PID control calculation
+    error_h_int = error_h_int + delayed_error*dt;
+    error_h_deriv = (delayed_error - error_h_prev)/dt;
+    error_h_prev = delayed_error;
+    
+    % Calculate elevator deflection using PID
+    delta_e(i) = Kp_h * delayed_error + Ki_h * error_h_int + Kd_h * error_h_deriv;
+    delta_e(i) = max(min(delta_e(i), 20*pi/180), -20*pi/180); % Limit elevator deflection
+    
+    % Aerodinamika calculations
+    CL = CL_alpha * alpha;
+    CD = CD0 + K * CL^2;
+    Cm = Cm_alpha * alpha + Cm_q * c_bar * q / (2 * V) + Cm_delta_e * delta_e(i);
+    
+    % Forces and moments
+    qbar = 0.5 * 1.225 * V^2;  % dynamic pressure
+    L = qbar * S * CL;
+    D = qbar * S * CD;
+    M = qbar * S * c_bar * Cm;
+    
+    % Persamaan dinamika pesawat (aircraft equations of motion)
+    % Velocity
+    V_dot = (-D - mass * g * sin(theta - alpha)) / mass;
+    
+    % Angle of attack
+    alpha_dot = q - (L - mass * g * cos(theta - alpha)) / (mass * V);
+    
+    % Pitch angle
+    theta_dot = q;
+    
+    % Pitch rate
+    q_dot = M / Iyy;
+    
+    % Altitude
+    h_dot = V * sin(theta - alpha);
+    
+    % Position
+    x_dot = V * cos(theta - alpha);
+    
+    % Integrasi euler untuk step berikutnya
+    X(:,i+1) = X(:,i) + dt * [V_dot; alpha_dot; theta_dot; q_dot; h_dot; x_dot];
+    
+    % Optimization of PID parameters using simple gradient descent
+    if mod(i, optimization_interval) == 0 && i > 1
+        % Calculate gradient based on errors
+        gradient_Kp = error_h(i)^2 - error_h(i-1)^2;
+        gradient_Ki = error_h_int^2;
+        gradient_Kd = error_h_deriv^2;
+        
+        % Update PID parameters
+        Kp_h = Kp_h - learning_rate * gradient_Kp;
+        Ki_h = Ki_h - learning_rate * gradient_Ki;
+        Kd_h = Kd_h - learning_rate * gradient_Kd;
+        
+        % Ensure positive values for stability
+        Kp_h = max(Kp_h, 0.001);
+        Ki_h = max(Ki_h, 0.0001);
+        Kd_h = max(Kd_h, 0.001);
+    end
+end
+
+%% Plotting results
+figure('Name', 'Error Trajectory Analysis');
+
+% Plot altitude tracking
+subplot(3,2,1);
+plot(t, [h_target(t); X(5,:)]);
+legend('Target', 'Actual');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+title('Altitude Tracking');
+grid on;
+
+% Plot altitude error
+subplot(3,2,2);
+plot(t, error_h);
+xlabel('Time (s)');
+ylabel('Error (m)');
+title('Altitude Error');
+grid on;
+
+% Plot trajectory in x-h plane
+subplot(3,2,3);
+plot(X(6,:), X(5,:), X(6,:), h_target(t), '--');
+legend('Actual', 'Target');
+xlabel('Distance (m)');
+ylabel('Altitude (m)');
+title('Flight Trajectory');
+grid on;
+
+% Plot control input
+subplot(3,2,4);
+plot(t, delta_e * 180/pi);
+xlabel('Time (s)');
+ylabel('Elevator Deflection (deg)');
+title('Control Input');
+grid on;
+
+% Plot telekomunikasi effects
+subplot(3,2,5);
+plot(t, error_h, t, error_transmitted);
+legend('Actual Error', 'Transmitted Error');
+xlabel('Time (s)');
+ylabel('Error (m)');
+title('Communication Effects');
+grid on;
+
+% Plot PID parameters over time
+Kp_history = linspace(0.01, Kp_h, n_steps);
+Ki_history = linspace(0.001, Ki_h, n_steps);
+Kd_history = linspace(0.05, Kd_h, n_steps);
+
+subplot(3,2,6);
+plot(t, Kp_history, t, Ki_history*10, t, Kd_history);
+legend('Kp', 'Ki*10', 'Kd');
+xlabel('Time (s)');
+ylabel('Parameter Value');
+title('Adaptive PID Parameters');
+grid on;
+
+% Tampilkan informasi tambahan
+fprintf('Summary of Flight Simulation:\n');
+fprintf('Final position: %.2f m\n', X(6,end));
+fprintf('Final altitude: %.2f m\n', X(5,end));
+fprintf('Target altitude: %.2f m\n', h_target(t_end));
+fprintf('Final altitude error: %.2f m\n', error_h(end));
+fprintf('Mean altitude error: %.2f m\n', mean(abs(error_h)));
+fprintf('Standard deviation of altitude error: %.2f m\n', std(error_h));
+
+%% Error Analysis untuk Telekomunikasi
+% Hitung statistik error komunikasi
+comm_error = error_transmitted - error_h;
+mean_comm_error = mean(abs(comm_error));
+std_comm_error = std(comm_error);
+
+figure('Name', 'Telecommunication Error Analysis');
+
+% Plot error distribution
+subplot(2,1,1);
+histogram(comm_error, 50);
+title('Distribution of Communication Errors');
+xlabel('Error (m)');
+ylabel('Frequency');
+grid on;
+
+% Plot error correlation
+subplot(2,1,2);
+[acf, lags] = xcorr(comm_error, 'coeff');
+plot(lags*dt, acf);
+title('Autocorrelation of Communication Errors');
+xlabel('Time Lag (s)');
+ylabel('Correlation Coefficient');
+grid on;
+
+fprintf('\nTelecommunication Analysis:\n');
+fprintf('Mean absolute communication error: %.4f m\n', mean_comm_error);
+fprintf('Standard deviation of communication error: %.4f m\n', std_comm_error);
+fprintf('Communication delay: %.2f s\n', comm_delay);
+fprintf('Packet loss probability: %.2f%%\n', packet_loss_prob*100);
+fprintf('Noise variance: %.4f\n', noise_variance);
