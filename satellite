@@ -1,0 +1,279 @@
+%% LoRaWAN Satellite Store-and-Forward Communication Simulation
+% This simulation models a satellite-based LoRaWAN network using
+% store-and-forward methodology
+
+clear all; close all; clc;
+
+%% Simulation Parameters
+% Time parameters
+sim_time = 3600; % Total simulation time in seconds (1 hour)
+dt = 1; % Time step in seconds
+time_vector = 0:dt:sim_time;
+
+% Satellite parameters
+satellite_altitude = 600e3; % Satellite altitude in meters (600 km)
+satellite_speed = 7.56e3; % Orbital speed in m/s
+earth_radius = 6371e3; % Earth radius in meters
+satellite_coverage_angle = 60; % Coverage angle in degrees
+satellite_period = 2*pi*sqrt((earth_radius + satellite_altitude)^3 / (3.986e14)); % Orbital period
+
+% LoRaWAN parameters
+num_nodes = 50; % Number of LoRaWAN nodes
+tx_power = 14; % Transmission power in dBm
+frequency = 868e6; % LoRaWAN frequency in Hz
+spreading_factor = 12; % LoRaWAN spreading factor
+bandwidth = 125e3; % LoRaWAN bandwidth in Hz
+coding_rate = 4/5; % LoRaWAN coding rate
+
+% Communication parameters
+packet_size = 51; % Packet size in bytes (typical LoRaWAN payload)
+max_buffer_size = 1000; % Satellite buffer size (number of packets)
+transmission_probability = 0.1; % Probability of node transmitting per time step
+
+%% Initialize Nodes
+% Random distribution of nodes across a geographic area
+area_size = 1000e3; % 1000 km x 1000 km area
+node_positions = rand(num_nodes, 2) * area_size - area_size/2; % Centered at origin
+
+% Node properties
+node_data_buffer = zeros(num_nodes, 1); % Data buffer for each node
+node_last_transmission = zeros(num_nodes, 1); % Last transmission time
+node_packets_sent = zeros(num_nodes, 1); % Packets sent counter
+node_packets_received = zeros(num_nodes, 1); % Packets received counter
+
+%% Initialize Satellite
+satellite_position = [0, 0]; % Initial satellite position
+satellite_buffer = []; % Satellite data buffer (store packets)
+satellite_packets_stored = 0;
+satellite_packets_forwarded = 0;
+
+% Ground station position (for data forwarding)
+ground_station_pos = [500e3, 500e3];
+
+%% Initialize Data Logging
+communication_log = [];
+satellite_coverage_log = [];
+throughput_log = [];
+buffer_usage_log = [];
+
+%% Main Simulation Loop
+fprintf('Starting LoRaWAN Satellite Store-and-Forward Simulation...\n');
+fprintf('Simulation Time: %d seconds\n', sim_time);
+fprintf('Number of Nodes: %d\n', num_nodes);
+fprintf('Satellite Altitude: %.0f km\n', satellite_altitude/1000);
+
+for t = 1:length(time_vector)
+    current_time = time_vector(t);
+    
+    %% Update Satellite Position
+    % Simplified circular orbit
+    orbital_angle = 2*pi * current_time / satellite_period;
+    satellite_position = [(earth_radius + satellite_altitude) * cos(orbital_angle), ...
+                         (earth_radius + satellite_altitude) * sin(orbital_angle)];
+    
+    %% Determine Nodes in Satellite Coverage
+    nodes_in_coverage = [];
+    for i = 1:num_nodes
+        % Calculate distance between satellite projection and node
+        sat_ground_projection = satellite_position * earth_radius / (earth_radius + satellite_altitude);
+        distance = norm(node_positions(i, :) - sat_ground_projection);
+        
+        % Check if node is within satellite coverage
+        max_coverage_distance = satellite_altitude * tan(deg2rad(satellite_coverage_angle));
+        if distance <= max_coverage_distance
+            nodes_in_coverage = [nodes_in_coverage, i];
+        end
+    end
+    
+    %% Node Transmission Phase
+    packets_generated = 0;
+    for i = nodes_in_coverage
+        % Random transmission based on probability
+        if rand() < transmission_probability
+            % Generate packet
+            packet = struct();
+            packet.node_id = i;
+            packet.timestamp = current_time;
+            packet.data_size = packet_size;
+            packet.position = node_positions(i, :);
+            
+            % Calculate path loss and signal quality
+            distance_to_sat = norm([satellite_position, satellite_altitude] - [node_positions(i, :), 0]);
+            path_loss = 20*log10(4*pi*distance_to_sat*frequency/3e8); % Free space path loss
+            received_power = tx_power - path_loss;
+            
+            % Simple success criteria based on received power
+            if received_power > -140 % dBm threshold
+                % Packet successfully received by satellite
+                if length(satellite_buffer) < max_buffer_size
+                    satellite_buffer = [satellite_buffer, packet];
+                    satellite_packets_stored = satellite_packets_stored + 1;
+                    node_packets_sent(i) = node_packets_sent(i) + 1;
+                    packets_generated = packets_generated + 1;
+                    
+                    % Log communication event
+                    comm_event = struct();
+                    comm_event.time = current_time;
+                    comm_event.type = 'uplink';
+                    comm_event.node_id = i;
+                    comm_event.satellite_pos = satellite_position;
+                    comm_event.success = true;
+                    communication_log = [communication_log, comm_event];
+                end
+            end
+        end
+    end
+    
+    %% Satellite Store-and-Forward Phase
+    packets_forwarded = 0;
+    if ~isempty(satellite_buffer)
+        % Check if satellite is in range of ground station
+        sat_ground_projection = satellite_position * earth_radius / (earth_radius + satellite_altitude);
+        distance_to_gs = norm(sat_ground_projection - ground_station_pos);
+        
+        if distance_to_gs <= max_coverage_distance
+            % Forward stored packets to ground station
+            num_packets_to_forward = min(length(satellite_buffer), 10); % Limit forwarding rate
+            
+            for j = 1:num_packets_to_forward
+                % Forward packet
+                forwarded_packet = satellite_buffer(1);
+                satellite_buffer(1) = []; % Remove from buffer
+                satellite_packets_forwarded = satellite_packets_forwarded + 1;
+                packets_forwarded = packets_forwarded + 1;
+                
+                % Log forwarding event
+                forward_event = struct();
+                forward_event.time = current_time;
+                forward_event.type = 'downlink';
+                forward_event.node_id = forwarded_packet.node_id;
+                forward_event.delay = current_time - forwarded_packet.timestamp;
+                forward_event.success = true;
+                communication_log = [communication_log, forward_event];
+            end
+        end
+    end
+    
+    %% Data Logging
+    satellite_coverage_log = [satellite_coverage_log, length(nodes_in_coverage)];
+    throughput_log = [throughput_log, packets_generated + packets_forwarded];
+    buffer_usage_log = [buffer_usage_log, length(satellite_buffer)];
+    
+    %% Display Progress
+    if mod(t, 600) == 0 % Every 10 minutes
+        fprintf('Time: %d s, Nodes in Coverage: %d, Buffer: %d packets\n', ...
+                current_time, length(nodes_in_coverage), length(satellite_buffer));
+    end
+end
+
+%% Calculate Performance Metrics
+total_packets_sent = sum(node_packets_sent);
+total_packets_received = satellite_packets_stored;
+total_packets_forwarded = satellite_packets_forwarded;
+
+packet_delivery_ratio = total_packets_received / total_packets_sent;
+forwarding_efficiency = total_packets_forwarded / total_packets_received;
+
+% Calculate average delay
+delays = [];
+for i = 1:length(communication_log)
+    if strcmp(communication_log(i).type, 'downlink')
+        delays = [delays, communication_log(i).delay];
+    end
+end
+average_delay = mean(delays);
+
+%% Results Display
+fprintf('\n=== Simulation Results ===\n');
+fprintf('Total Packets Sent by Nodes: %d\n', total_packets_sent);
+fprintf('Total Packets Received by Satellite: %d\n', total_packets_received);
+fprintf('Total Packets Forwarded to Ground Station: %d\n', total_packets_forwarded);
+fprintf('Packet Delivery Ratio: %.2f%%\n', packet_delivery_ratio * 100);
+fprintf('Forwarding Efficiency: %.2f%%\n', forwarding_efficiency * 100);
+fprintf('Average Delay: %.2f seconds\n', average_delay);
+fprintf('Maximum Buffer Usage: %d packets\n', max(buffer_usage_log));
+
+%% Visualization
+figure('Position', [100, 100, 1200, 800]);
+
+% Plot 1: Satellite Coverage Over Time
+subplot(2, 3, 1);
+plot(time_vector/60, satellite_coverage_log, 'b-', 'LineWidth', 1.5);
+xlabel('Time (minutes)');
+ylabel('Nodes in Coverage');
+title('Satellite Coverage Over Time');
+grid on;
+
+% Plot 2: Throughput Over Time
+subplot(2, 3, 2);
+plot(time_vector/60, throughput_log, 'r-', 'LineWidth', 1.5);
+xlabel('Time (minutes)');
+ylabel('Packets per Second');
+title('System Throughput');
+grid on;
+
+% Plot 3: Buffer Usage
+subplot(2, 3, 3);
+plot(time_vector/60, buffer_usage_log, 'g-', 'LineWidth', 1.5);
+xlabel('Time (minutes)');
+ylabel('Buffer Occupancy');
+title('Satellite Buffer Usage');
+grid on;
+
+% Plot 4: Node Distribution and Coverage
+subplot(2, 3, 4);
+scatter(node_positions(:,1)/1000, node_positions(:,2)/1000, 50, 'b', 'filled');
+hold on;
+scatter(ground_station_pos(1)/1000, ground_station_pos(2)/1000, 100, 'r', 's', 'filled');
+% Show satellite coverage area at final position
+sat_final_pos = satellite_position * earth_radius / (earth_radius + satellite_altitude);
+coverage_radius = satellite_altitude * tan(deg2rad(satellite_coverage_angle));
+theta = 0:0.1:2*pi;
+coverage_x = sat_final_pos(1)/1000 + coverage_radius/1000 * cos(theta);
+coverage_y = sat_final_pos(2)/1000 + coverage_radius/1000 * sin(theta);
+plot(coverage_x, coverage_y, 'k--', 'LineWidth', 2);
+xlabel('X Position (km)');
+ylabel('Y Position (km)');
+title('Network Topology');
+legend('LoRaWAN Nodes', 'Ground Station', 'Satellite Coverage', 'Location', 'best');
+grid on;
+axis equal;
+
+% Plot 5: Delay Distribution
+subplot(2, 3, 5);
+if ~isempty(delays)
+    histogram(delays/60, 20, 'FaceColor', 'm', 'EdgeColor', 'black');
+    xlabel('Delay (minutes)');
+    ylabel('Frequency');
+    title('Packet Delay Distribution');
+    grid on;
+end
+
+% Plot 6: Performance Summary
+subplot(2, 3, 6);
+performance_metrics = [packet_delivery_ratio*100, forwarding_efficiency*100, ...
+                      (average_delay/60), (max(buffer_usage_log)/max_buffer_size)*100];
+metric_names = {'PDR (%)', 'Fwd Eff (%)', 'Avg Delay (min)', 'Max Buffer (%)'};
+bar(performance_metrics, 'FaceColor', [0.2, 0.6, 0.8]);
+set(gca, 'XTickLabel', metric_names);
+ylabel('Value');
+title('Performance Summary');
+grid on;
+
+% Add text annotations
+for i = 1:length(performance_metrics)
+    text(i, performance_metrics(i) + max(performance_metrics)*0.02, ...
+         sprintf('%.1f', performance_metrics(i)), ...
+         'HorizontalAlignment', 'center', 'FontWeight', 'bold');
+end
+
+sgtitle('LoRaWAN Satellite Store-and-Forward Communication Simulation');
+
+%% Save Results
+save('lorawan_satellite_simulation_results.mat', 'communication_log', ...
+     'satellite_coverage_log', 'throughput_log', 'buffer_usage_log', ...
+     'node_positions', 'time_vector', 'packet_delivery_ratio', ...
+     'forwarding_efficiency', 'average_delay');
+
+fprintf('\nSimulation completed successfully!\n');
+fprintf('Results saved to: lorawan_satellite_simulation_results.mat\n');
