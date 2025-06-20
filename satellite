@@ -270,10 +270,60 @@ end
 sgtitle('LoRaWAN Satellite Store-and-Forward Communication Simulation');
 
 %% Save Results
-save('lorawan_satellite_simulation_results.mat', 'communication_log', ...
-     'satellite_coverage_log', 'throughput_log', 'buffer_usage_log', ...
-     'node_positions', 'time_vector', 'packet_delivery_ratio', ...
-     'forwarding_efficiency', 'average_delay');
+try
+    % Try to save to current directory first
+    save('lorawan_satellite_simulation_results.mat', 'communication_log', ...
+         'satellite_coverage_log', 'throughput_log', 'buffer_usage_log', ...
+         'node_positions', 'time_vector', 'packet_delivery_ratio', ...
+         'forwarding_efficiency', 'average_delay');
+    fprintf('\nSimulation completed successfully!\n');
+    fprintf('Results saved to: %s\n', fullfile(pwd, 'lorawan_satellite_simulation_results.mat'));
+catch ME
+    % If permission denied, try alternative locations
+    fprintf('\nWarning: Cannot save to current directory. Trying alternative locations...\n');
+    
+    % Try user's Documents folder
+    try
+        if ispc
+            documents_path = fullfile(getenv('USERPROFILE'), 'Documents');
+        else
+            documents_path = fullfile(getenv('HOME'), 'Documents');
+        end
+        
+        if exist(documents_path, 'dir')
+            save_path = fullfile(documents_path, 'lorawan_satellite_simulation_results.mat');
+            save(save_path, 'communication_log', ...
+                 'satellite_coverage_log', 'throughput_log', 'buffer_usage_log', ...
+                 'node_positions', 'time_vector', 'packet_delivery_ratio', ...
+                 'forwarding_efficiency', 'average_delay');
+            fprintf('Results saved to: %s\n', save_path);
+        else
+            error('Documents folder not found');
+        end
+    catch
+        % Try temporary directory as last resort
+        try
+            temp_path = tempdir;
+            save_path = fullfile(temp_path, 'lorawan_satellite_simulation_results.mat');
+            save(save_path, 'communication_log', ...
+                 'satellite_coverage_log', 'throughput_log', 'buffer_usage_log', ...
+                 'node_positions', 'time_vector', 'packet_delivery_ratio', ...
+                 'forwarding_efficiency', 'average_delay');
+            fprintf('Results saved to temporary directory: %s\n', save_path);
+        catch
+            % If all else fails, just display results without saving
+            fprintf('Unable to save results to file due to permission restrictions.\n');
+            fprintf('You can manually save the workspace variables if needed.\n');
+            fprintf('Key variables: communication_log, satellite_coverage_log, throughput_log\n');
+        end
+    end
+    
+    fprintf('\nSimulation completed successfully!\n');
+end
 
-fprintf('\nSimulation completed successfully!\n');
-fprintf('Results saved to: lorawan_satellite_simulation_results.mat\n');
+%% Alternative: Display save instructions for manual saving
+fprintf('\n=== Manual Save Instructions ===\n');
+fprintf('If automatic saving failed, you can manually save results using:\n');
+fprintf('save(''my_results.mat'', ''communication_log'', ''satellite_coverage_log'', ...\n');
+fprintf('     ''throughput_log'', ''buffer_usage_log'', ''node_positions'', ...\n');
+fprintf('     ''time_vector'', ''packet_delivery_ratio'', ''forwarding_efficiency'', ''average_delay'');\n');
